@@ -1,507 +1,68 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import AuthPage, { AuthSplash } from "./auth/AuthPage";
-import { fetchFinanceOverview, type FinanceOverview } from "./api/finance";
+import { Icon, type IconName } from "./components/Icon";
+import {
+  Badge,
+  Dropdown,
+  Field,
+  Modal,
+  ModuleShell,
+  Panel,
+  Toast,
+  currentMonthText,
+  money,
+  todayText,
+  type MenuItem,
+  type Notify,
+  type ToastState,
+} from "./components/ui";
+import PlansPage from "./features/plans/PlansPage";
+import LearningPage from "./features/learning/LearningPage";
+import InspirationPage from "./features/inspiration/InspirationPage";
+import MoviesPage from "./features/movies/MoviesPage";
+import TravelPage from "./features/travel/TravelPage";
+import FitnessPage from "./features/fitness/FitnessPage";
+import MusicPage from "./features/music/MusicPage";
+import AlbumPage from "./features/album/AlbumPage";
+import DesignSystemPage from "./features/system/DesignSystemPage";
+import { TemplatePreview } from "./features/system/TemplatePreview";
+import { templateKeyOf } from "./features/system/templates";
+import { AddModuleDialog } from "./features/modules/AddModuleDialog";
+import Dashboard from "./features/dashboard/Dashboard";
+import {
+  addModule as addWorkspaceModule,
+  fetchModules,
+  hideModule,
+  sortModules,
+  type WorkspaceModule,
+} from "./api/module";
+import {
+  commitFinanceImport,
+  deleteFinanceCategory,
+  deleteFinanceTransaction,
+  downloadCsv,
+  fetchFinanceCategories,
+  fetchFinanceExport,
+  fetchFinanceOverview,
+  fetchFinanceTransactions,
+  fetchImportTemplate,
+  previewFinanceImport,
+  saveFinanceCategory,
+  saveFinanceTransaction,
+  type FinanceCategory,
+  type FinanceCategoryInput,
+  type FinanceOverview,
+  type FinanceTransactionQuery,
+  type FinanceTransactionRow,
+  type ImportCommitResult,
+  type ImportPreview,
+} from "./api/finance";
 
-type Page =
-  | "home"
-  | "finance"
-  | "music"
-  | "plans"
-  | "learning"
-  | "system"
-  | "movies"
-  | "travel"
-  | "fitness"
-  | "inspiration";
-type IconName =
-  | "grid"
-  | "wallet"
-  | "music"
-  | "check"
-  | "book"
-  | "plus"
-  | "search"
-  | "command"
-  | "settings"
-  | "bell"
-  | "more"
-  | "arrow"
-  | "trend"
-  | "play"
-  | "pause"
-  | "clock"
-  | "calendar"
-  | "filter"
-  | "layout"
-  | "chevron";
+type Page = string;
 
-const paths: Record<IconName, React.ReactNode> = {
-  grid: (
-    <>
-      <rect x="3" y="3" width="7" height="7" rx="2" />
-      <rect x="14" y="3" width="7" height="7" rx="2" />
-      <rect x="3" y="14" width="7" height="7" rx="2" />
-      <rect x="14" y="14" width="7" height="7" rx="2" />
-    </>
-  ),
-  wallet: (
-    <>
-      <path d="M4 7.5V6a2 2 0 0 1 2-2h12v3.5" />
-      <rect x="3" y="7.5" width="18" height="12.5" rx="3" />
-      <path d="M16 12h5v4h-5a2 2 0 0 1 0-4Z" />
-    </>
-  ),
-  music: (
-    <>
-      <path d="M9 18V5l10-2v13" />
-      <circle cx="6" cy="18" r="3" />
-      <circle cx="16" cy="16" r="3" />
-    </>
-  ),
-  check: (
-    <>
-      <path d="M9 11l3 3L22 4" />
-      <path d="M21 12a9 9 0 1 1-5.3-8.2" />
-    </>
-  ),
-  book: (
-    <>
-      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
-    </>
-  ),
-  plus: <path d="M12 5v14M5 12h14" />,
-  search: (
-    <>
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-4-4" />
-    </>
-  ),
-  command: (
-    <>
-      <path d="M18 9a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3Z" />
-    </>
-  ),
-  settings: (
-    <>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" />
-    </>
-  ),
-  bell: (
-    <>
-      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-      <path d="M10 21h4" />
-    </>
-  ),
-  more: (
-    <>
-      <circle cx="5" cy="12" r="1" />
-      <circle cx="12" cy="12" r="1" />
-      <circle cx="19" cy="12" r="1" />
-    </>
-  ),
-  arrow: (
-    <>
-      <path d="M5 12h14" />
-      <path d="m13 6 6 6-6 6" />
-    </>
-  ),
-  trend: (
-    <>
-      <path d="m3 17 6-6 4 4 8-9" />
-      <path d="M15 6h6v6" />
-    </>
-  ),
-  play: <path d="m8 5 11 7-11 7Z" />,
-  pause: (
-    <>
-      <path d="M9 5v14" />
-      <path d="M15 5v14" />
-    </>
-  ),
-  clock: (
-    <>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 2" />
-    </>
-  ),
-  calendar: (
-    <>
-      <rect x="3" y="5" width="18" height="16" rx="2" />
-      <path d="M16 3v4M8 3v4M3 10h18" />
-    </>
-  ),
-  filter: <path d="M4 5h16l-6 7v5l-4 2v-7Z" />,
-  layout: (
-    <>
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <path d="M3 9h18M9 21V9" />
-    </>
-  ),
-  chevron: <path d="m9 18 6-6-6-6" />,
-};
-
-function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
-  return (
-    <svg
-      className="icon"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {paths[name]}
-    </svg>
-  );
-}
-
-const initialModules: Array<{
-  id: Page;
-  name: string;
-  icon: IconName;
-  color: string;
-  note: string;
-}> = [
-  {
-    id: "finance" as Page,
-    name: "记账",
-    icon: "wallet" as IconName,
-    color: "#E56F4A",
-    note: "本月结余 ¥7,640",
-  },
-  {
-    id: "music" as Page,
-    name: "音乐",
-    icon: "music" as IconName,
-    color: "#9B72D2",
-    note: "正在播放 1 首",
-  },
-  {
-    id: "plans" as Page,
-    name: "计划",
-    icon: "check" as IconName,
-    color: "#4C8D78",
-    note: "3 项待完成",
-  },
-  {
-    id: "learning" as Page,
-    name: "学习",
-    icon: "book" as IconName,
-    color: "#D4A63D",
-    note: "连续 12 天",
-  },
-];
-
-const week = ["一", "二", "三", "四", "五", "六", "日"];
-
-function Badge({ children, tone = "" }: { children: React.ReactNode; tone?: string }) {
-  return <span className={`badge ${tone}`}>{children}</span>;
-}
-
-function Ring({
-  value,
-  color = "#E56F4A",
-  size = 92,
-  children,
-}: {
-  value: number;
-  color?: string;
-  size?: number;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div
-      className="ring"
-      style={{
-        width: size,
-        height: size,
-        background: `conic-gradient(${color} ${value * 3.6}deg, #edece7 0)`,
-      }}
-    >
-      <div className="ring-inner">
-        {children ?? (
-          <>
-            <b>{value}%</b>
-            <small>完成</small>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ModuleShell({
-  title,
-  subtitle,
-  color,
-  actions,
-  children,
-  status,
-}: {
-  title: string;
-  subtitle: string;
-  color: string;
-  actions?: React.ReactNode;
-  children: React.ReactNode;
-  status?: string;
-}) {
-  return (
-    <section className="module-shell">
-      <header className="module-header">
-        <div className="module-title">
-          <span className="title-mark" style={{ background: color }} />
-          <div>
-            <div className="eyebrow">MODULE / PERSONAL</div>
-            <h1>{title}</h1>
-            <p>{subtitle}</p>
-          </div>
-        </div>
-        <div className="module-actions">
-          {actions}
-          <button className="icon-btn">
-            <Icon name="more" />
-          </button>
-        </div>
-      </header>
-      <div className="module-content">{children}</div>
-      <footer className="module-status">
-        <span>
-          <i className="status-dot" />
-          {status || "数据已同步"}
-        </span>
-        <span>上次更新 · 刚刚</span>
-      </footer>
-    </section>
-  );
-}
-
-function Dashboard({ open }: { open: (p: Page) => void }) {
-  const { user } = useAuth();
-  const [sizes, setSizes] = useState<Record<string, boolean>>({});
-  const flip = (id: string) => setSizes((s) => ({ ...s, [id]: !s[id] }));
-  const [finance, setFinance] = useState<FinanceOverview | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    fetchFinanceOverview()
-      .then((result) => {
-        if (active) setFinance(result);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const monthLabel = finance ? MONTH_LABELS[Number(finance.month.slice(5, 7)) - 1] : "本月";
-  const [balanceInt, balanceDec] = money(finance?.balanceCents ?? 0, 2).split(".");
-  return (
-    <div className="page dashboard">
-      <div className="page-intro">
-        <div>
-          <div className="eyebrow">THURSDAY · 24 OCTOBER</div>
-          <h1>晚上好，{user?.nickname || "朋友"}</h1>
-          <p>你今天的节奏不错。这里是生活里正在发生的事。</p>
-        </div>
-        <div className="today">
-          <span>今日专注</span>
-          <strong>2h 40m</strong>
-          <div className="mini-bars">
-            {[30, 55, 35, 78, 64, 90, 48].map((h, i) => (
-              <i key={i} style={{ height: h + "%" }} />
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="bento">
-        <article
-          className={`bento-card balance ${sizes.finance ? "wide" : ""}`}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            flip("finance");
-          }}
-        >
-          <CardTop
-            icon="wallet"
-            color="#E56F4A"
-            label={`记账 · ${monthLabel}`}
-            onOpen={() => open("finance")}
-            onResize={() => flip("finance")}
-          />
-          <div className="balance-main">
-            <span>本月结余</span>
-            <strong>
-              ¥ {balanceInt}
-              <small>.{balanceDec}</small>
-            </strong>
-            <Badge tone={(finance?.balanceChangePct ?? 0) >= 0 ? "up" : "neutral"}>
-              {signedPct(finance?.balanceChangePct)}
-            </Badge>
-          </div>
-          <div className="money-row">
-            <div>
-              <span>收入</span>
-              <b>¥ {money(finance?.incomeCents ?? 0)}</b>
-            </div>
-            <div>
-              <span>支出</span>
-              <b>¥ {money(finance?.expenseCents ?? 0)}</b>
-            </div>
-          </div>
-          <div className="line-chart">
-            <svg viewBox="0 0 500 90" preserveAspectRatio="none">
-              <path
-                className="area"
-                d="M0 72 C50 69 72 25 120 42 S190 66 230 34 300 60 338 28 420 50 500 10 L500 90H0Z"
-              />
-              <path d="M0 72 C50 69 72 25 120 42 S190 66 230 34 300 60 338 28 420 50 500 10" />
-            </svg>
-          </div>
-        </article>
-        <article className="bento-card now-playing">
-          <CardTop icon="music" color="#9B72D2" label="此刻播放" onOpen={() => open("music")} />
-          <div className="album-art album-1">
-            <span>
-              STILL
-              <br />
-              LIFE
-            </span>
-          </div>
-          <div className="track-info">
-            <div>
-              <b>Garden Song</b>
-              <span>Phoebe Bridgers · Punisher</span>
-            </div>
-            <button className="play-btn">
-              <Icon name="pause" size={16} />
-            </button>
-          </div>
-          <div className="progress">
-            <i style={{ width: "38%" }} />
-            <b style={{ left: "38%" }} />
-          </div>
-          <div className="time">
-            <span>1:42</span>
-            <span>4:05</span>
-          </div>
-        </article>
-        <article className="bento-card plans-card">
-          <CardTop icon="check" color="#4C8D78" label="今日计划" onOpen={() => open("plans")} />
-          <div className="plan-count">
-            <strong>3</strong>
-            <span>
-              of 5<br />
-              已完成
-            </span>
-            <Ring value={60} color="#4C8D78" size={64} />
-          </div>
-          <Todo text="整理书房和资料" done />
-          <Todo text="完成阅读笔记" done />
-          <Todo text="更新十月预算" />
-        </article>
-        <article className="bento-card learning-card">
-          <CardTop icon="book" color="#D4A63D" label="学习轨迹" onOpen={() => open("learning")} />
-          <div className="learning-head">
-            <div>
-              <strong>12</strong>
-              <span>天连续学习</span>
-            </div>
-            <Badge>本周 4.5h</Badge>
-          </div>
-          <div className="heatmap compact">
-            {Array.from({ length: 35 }, (_, i) => (
-              <i key={i} className={`l${(i * 7 + (i % 3)) % 5}`} />
-            ))}
-          </div>
-          <div className="course-mini">
-            <div className="course-icon">UI</div>
-            <div>
-              <b>界面设计系统</b>
-              <span>第 8 / 12 章</span>
-            </div>
-            <span>67%</span>
-          </div>
-        </article>
-        <article className="bento-card note-card">
-          <div className="eyebrow">QUICK NOTE · 21:46</div>
-          <blockquote>
-            “保持好奇，也保持
-            <br />
-            自己的节奏。”
-          </blockquote>
-          <div className="note-foot">
-            <span>随手记</span>
-            <button className="round-arrow">
-              <Icon name="arrow" size={15} />
-            </button>
-          </div>
-        </article>
-      </div>
-      <p className="interaction-tip">提示：右键点击卡片可快速调整尺寸 · 拖拽左侧模块可排序</p>
-    </div>
-  );
-}
-
-function CardTop({
-  icon,
-  color,
-  label,
-  onOpen,
-  onResize,
-}: {
-  icon: IconName;
-  color: string;
-  label: string;
-  onOpen: () => void;
-  onResize?: () => void;
-}) {
-  return (
-    <div className="card-top">
-      <div>
-        <span className="module-icon" style={{ color, background: color + "15" }}>
-          <Icon name={icon} size={16} />
-        </span>
-        <b>{label}</b>
-      </div>
-      <div>
-        {onResize && (
-          <button className="ghost-action" onClick={onResize}>
-            <Icon name="layout" size={15} />
-          </button>
-        )}
-        <button className="ghost-action" onClick={onOpen}>
-          <Icon name="arrow" size={15} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Todo({ text, done = false }: { text: string; done?: boolean }) {
-  const [checked, setChecked] = useState(done);
-  return (
-    <button className={`todo ${checked ? "done" : ""}`} onClick={() => setChecked(!checked)}>
-      <i>{checked && <Icon name="check" size={12} />}</i>
-      <span>{text}</span>
-      <Icon name="more" size={15} />
-    </button>
-  );
-}
 
 const MONTH_LABELS = ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"];
-
-function money(cents: number, decimals = 0) {
-  return (cents / 100).toLocaleString("zh-CN", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-}
 
 function signedPct(value: number | undefined) {
   if (value === undefined || Number.isNaN(value)) return "—";
@@ -525,38 +86,686 @@ function linePath(values: number[], max: number) {
   }, "");
 }
 
-function FinancePage() {
-  const [data, setData] = useState<FinanceOverview | null>(null);
+type FinanceDialog =
+  | { kind: "transaction"; row?: FinanceTransactionRow }
+  | { kind: "categories" }
+  | { kind: "import" }
+  | { kind: "confirm"; title: string; message: string; onConfirm: () => Promise<void> }
+  | null;
+
+const PRESET_CATEGORIES: Record<number, string[]> = {
+  1: ["工资收入", "奖金", "兼职收入", "理财收益", "吃喝玩乐", "其他收入"],
+  2: ["吃喝玩乐", "日常饮食", "交通出行", "居住生活", "购物消费", "文化与学习", "医疗健康", "人情往来", "其他"],
+};
+
+function TransactionDialog({
+  row,
+  categories,
+  onClose,
+  onSaved,
+  notify,
+}: {
+  row: FinanceTransactionRow | null;
+  categories: FinanceCategory[];
+  onClose: () => void;
+  onSaved: () => void;
+  notify: Notify;
+}) {
+  const [type, setType] = useState(row?.type ?? 2);
+  const [amount, setAmount] = useState(row ? (row.amountCents / 100).toFixed(2) : "");
+  const [categoryText, setCategoryText] = useState(row?.categoryId ? row.category : "");
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [date, setDate] = useState(row?.date ?? todayText());
+  const [title, setTitle] = useState(row?.title ?? "");
+  const [note, setNote] = useState(row?.note ?? "");
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [attempt, setAttempt] = useState(0);
+  const categoryRef = useRef<HTMLDivElement>(null);
+
+  const existingNames = new Set(categories.filter((item) => item.kind === type).map((item) => item.name));
+  const suggestions = Array.from(
+    new Set([...PRESET_CATEGORIES[type], ...existingNames]),
+  ).filter((name) => !categoryText.trim() || name.includes(categoryText.trim()));
+  const newCategoryName = categoryText.trim() && !existingNames.has(categoryText.trim()) ? categoryText.trim() : "";
+
+  useEffect(() => {
+    if (!categoryOpen) return;
+    const close = (event: MouseEvent) => {
+      if (categoryRef.current && !categoryRef.current.contains(event.target as Node)) setCategoryOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [categoryOpen]);
+
+  const changeType = (next: number) => {
+    if (next === type) return;
+    setType(next);
+    setCategoryText("");
+    setCategoryOpen(false);
+  };
+
+  const submit = async () => {
+    const cents = Math.round(Number(amount) * 100);
+    if (!Number.isFinite(cents) || cents <= 0) {
+      setError("请输入大于 0 的金额");
+      return;
+    }
+    if (!title.trim()) {
+      setError("请填写交易标题");
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      setError("请选择正确日期");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await saveFinanceTransaction({
+        id: row?.id ?? 0,
+        type,
+        categoryId: 0,
+        categoryName: categoryText.trim(),
+        amountCents: cents,
+        title: title.trim(),
+        note: note.trim(),
+        date,
+      });
+      notify(row ? "流水已更新" : "已记下一笔");
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      title={row ? "编辑流水" : "记一笔"}
+      eyebrow="TRANSACTION"
+      subtitle={row ? "修改后会立即反映到统计与图表。" : "记录一笔收入或支出，金额单位为元。"}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="secondary-btn" onClick={onClose}>
+            取消
+          </button>
+          <button className="primary-btn" disabled={busy} onClick={() => void submit()}>
+            {busy ? "保存中…" : row ? "保存修改" : "保存"}
+          </button>
+        </>
+      }
+    >
+      <div className="segmented">
+        <button className={type === 2 ? "active" : ""} onClick={() => changeType(2)}>
+          支出
+        </button>
+        <button className={type === 1 ? "active" : ""} onClick={() => changeType(1)}>
+          收入
+        </button>
+      </div>
+      <div className="form-grid">
+        <Field label="金额（元）">
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            placeholder="0.00"
+            autoFocus
+          />
+        </Field>
+        <Field label="日期">
+          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        </Field>
+        <Field
+          label="分类"
+          hint={newCategoryName ? `将自动新建分类「${newCategoryName}」` : "可下拉选择，也可直接输入新分类"}
+        >
+          <div className="combo" ref={categoryRef}>
+            <input
+              value={categoryText}
+              maxLength={32}
+              placeholder="选择或输入，例如：吃喝玩乐"
+              onFocus={() => setCategoryOpen(true)}
+              onChange={(event) => {
+                setCategoryText(event.target.value);
+                setCategoryOpen(true);
+              }}
+            />
+            <button className="combo-toggle" type="button" onClick={() => setCategoryOpen((value) => !value)} aria-label="展开分类">
+              <Icon name="chevron" size={14} />
+            </button>
+            {categoryOpen && (
+              <div className="combo-menu">
+                <div className="combo-menu-head">{newCategoryName ? `新建分类「${newCategoryName}」` : "常用分类"}</div>
+                {suggestions.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => {
+                      setCategoryText(name);
+                      setCategoryOpen(false);
+                    }}
+                  >
+                    <span>{name}</span>
+                    <small className={existingNames.has(name) ? "" : "new"}>{existingNames.has(name) ? "已有" : "新建"}</small>
+                  </button>
+                ))}
+                {!suggestions.length && <div className="combo-empty">直接输入名称即可新建分类</div>}
+              </div>
+            )}
+          </div>
+        </Field>
+        <Field label="标题">
+          <input value={title} maxLength={64} onChange={(event) => setTitle(event.target.value)} placeholder="例如：午餐" />
+        </Field>
+        <Field label="备注" grow>
+          <input value={note} maxLength={255} onChange={(event) => setNote(event.target.value)} placeholder="可留空" />
+        </Field>
+      </div>
+      {error && <div className="form-error">{error}</div>}
+    </Modal>
+  );
+}
+
+function CategoryDialog({
+  categories,
+  onClose,
+  onChanged,
+  notify,
+}: {
+  categories: FinanceCategory[];
+  onClose: () => void;
+  onChanged: () => void;
+  notify: Notify;
+}) {
+  const emptyDraft: FinanceCategoryInput = { name: "", kind: 2, color: "#B89CD5", sortOrder: 0 };
+  const [draft, setDraft] = useState<FinanceCategoryInput>(emptyDraft);
+  const [editingId, setEditingId] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const reset = () => {
+    setDraft(emptyDraft);
+    setEditingId(0);
+    setError("");
+  };
+
+  const submit = async () => {
+    if (!draft.name.trim()) {
+      setError("请填写分类名称");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await saveFinanceCategory({ ...draft, id: editingId, name: draft.name.trim() });
+      notify(editingId ? "分类已更新" : "分类已新增");
+      reset();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (item: FinanceCategory) => {
+    if (item.transactionCount > 0) {
+      notify(`「${item.name}」下还有 ${item.transactionCount} 笔流水，请先移走`, "err");
+      return;
+    }
+    setBusy(true);
+    try {
+      await deleteFinanceCategory(item.id);
+      notify("分类已删除");
+      if (editingId === item.id) reset();
+      onChanged();
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "删除失败", "err");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      title="分类管理"
+      eyebrow="CATEGORIES"
+      subtitle="维护收入与支出分类，已有流水的分类需要先移走流水才能删除。"
+      onClose={onClose}
+      wide
+      footer={
+        <button className="primary-btn" onClick={onClose}>
+          完成
+        </button>
+      }
+    >
+      <div className="category-manager">
+        <div className="category-list">
+          {[{ id: 0, name: "收入分类", kind: 1 }, { id: 0, name: "支出分类", kind: 2 }].map((group) => (
+            <div key={group.name} className="category-group">
+              <b>{group.name}</b>
+              {categories.filter((item) => item.kind === group.kind).map((item) => (
+                <div className="category-item" key={item.id}>
+                  <i className="swatch" style={{ background: item.color }} />
+                  <span>{item.name}</span>
+                  <small>{item.transactionCount} 笔</small>
+                  <button className="text-btn" onClick={() => { setEditingId(item.id); setDraft({ id: item.id, name: item.name, kind: item.kind, color: item.color, sortOrder: item.sortOrder }); setError(""); }}>
+                    <Icon name="edit" size={13} />
+                    编辑
+                  </button>
+                  <button className="text-btn danger-text" disabled={busy || item.transactionCount > 0} onClick={() => void remove(item)}>
+                    <Icon name="trash" size={13} />
+                    删除
+                  </button>
+                </div>
+              ))}
+              {!categories.some((item) => item.kind === group.kind) && <p className="muted-text">暂无分类</p>}
+            </div>
+          ))}
+        </div>
+        <div className="category-form">
+          <b>{editingId ? "编辑分类" : "新增分类"}</b>
+          <Field label="名称">
+            <input value={draft.name} maxLength={32} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="例如：交通出行" />
+          </Field>
+          <Field label="类型">
+            <select value={draft.kind} onChange={(event) => setDraft({ ...draft, kind: Number(event.target.value) })}>
+              <option value={2}>支出</option>
+              <option value={1}>收入</option>
+            </select>
+          </Field>
+          <Field label="颜色">
+            <div className="color-row">
+              <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(draft.color) ? draft.color : "#B89CD5"} onChange={(event) => setDraft({ ...draft, color: event.target.value })} />
+              <input value={draft.color} maxLength={7} onChange={(event) => setDraft({ ...draft, color: event.target.value })} />
+            </div>
+          </Field>
+          <Field label="排序" hint="数字越小越靠前">
+            <input type="number" min={0} value={draft.sortOrder} onChange={(event) => setDraft({ ...draft, sortOrder: Number(event.target.value) })} />
+          </Field>
+          {error && <div className="form-error">{error}</div>}
+          <div className="category-form-actions">
+            {editingId > 0 && <button className="text-btn" onClick={reset}>取消编辑</button>}
+            <button className="primary-btn" disabled={busy} onClick={() => void submit()}>
+              {busy ? "保存中…" : editingId ? "保存修改" : "新增分类"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ImportDialog({
+  onClose,
+  onImported,
+  notify,
+}: {
+  onClose: () => void;
+  onImported: () => void;
+  notify: Notify;
+}) {
+  const [content, setContent] = useState("");
+  const [filename, setFilename] = useState("");
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [result, setResult] = useState<ImportCommitResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const readFile = async (file: File) => {
+    if (!/\.(csv|txt|tsv)$/i.test(file.name)) {
+      setError("请选择 .csv / .txt / .tsv 文件");
+      return;
+    }
+    setContent(await file.text());
+    setFilename(file.name);
+    setPreview(null);
+    setResult(null);
+    setError("");
+  };
+
+  const downloadTemplate = async () => {
+    setBusy(true);
+    try {
+      const template = await fetchImportTemplate();
+      downloadCsv(template.filename, template.content);
+      notify("导入模板已下载");
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "模板下载失败", "err");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const parse = async () => {
+    if (!content.trim()) {
+      setError("请先选择文件或粘贴 CSV 内容");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const data = await previewFinanceImport(content);
+      setPreview(data);
+    } catch (err) {
+      setPreview(null);
+      setError(err instanceof Error ? err.message : "解析失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const commit = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const data = await commitFinanceImport(content);
+      setResult(data);
+      notify(`成功导入 ${data.imported} 笔流水`);
+      onImported();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "导入失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const footer = result ? (
+    <button className="primary-btn" onClick={onClose}>
+      完成
+    </button>
+  ) : preview ? (
+    <>
+      <button className="secondary-btn" onClick={() => setPreview(null)}>
+        重新选择
+      </button>
+      <button className="primary-btn" disabled={busy || preview.validCount === 0} onClick={() => void commit()}>
+        {busy ? "导入中…" : `确认导入 ${preview.validCount} 笔`}
+      </button>
+    </>
+  ) : (
+    <>
+      <button className="secondary-btn" onClick={onClose}>
+        取消
+      </button>
+      <button className="primary-btn" disabled={busy || !content.trim()} onClick={() => void parse()}>
+        {busy ? "解析中…" : "解析预览"}
+      </button>
+    </>
+  );
+
+  return (
+    <Modal
+      title="导入流水"
+      eyebrow="IMPORT"
+      subtitle="下载模板 → 填写数据 → 上传预览 → 确认导入，重复记录会自动跳过。"
+      onClose={onClose}
+      wide
+      footer={footer}
+    >
+      <div className="import-template-card">
+        <div>
+          <b>1 · 下载导入模板</b>
+          <p>列顺序：日期,类型,分类,金额,标题,备注。金额单位为元，分类不存在时自动创建。</p>
+          <code>2026-11-13,支出,日常饮食,32.50,午餐,公司楼下</code>
+        </div>
+        <button className="secondary-btn" disabled={busy} onClick={() => void downloadTemplate()}>
+          <Icon name="download" size={15} />
+          下载模板
+        </button>
+      </div>
+
+      <div
+        className={`import-drop ${dragOver ? "over" : ""}`}
+        onDragOver={(event) => { event.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragOver(false);
+          const file = event.dataTransfer.files[0];
+          if (file) void readFile(file);
+        }}
+        onClick={() => fileRef.current?.click()}
+      >
+        <Icon name="upload" size={22} />
+        <b>{filename || "点击选择或拖拽 CSV 文件到这里"}</b>
+        <span>支持 .csv / .txt / .tsv，UTF-8 编码，单次最多 5000 行</span>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".csv,.txt,.tsv"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void readFile(file);
+            event.target.value = "";
+          }}
+        />
+      </div>
+
+      <Field label="或直接粘贴 CSV 内容" grow>
+        <textarea
+          rows={4}
+          value={content}
+          placeholder={"日期,类型,分类,金额,标题,备注\n2026-11-13,支出,日常饮食,32.50,午餐,"}
+          onChange={(event) => {
+            setContent(event.target.value);
+            setPreview(null);
+            setResult(null);
+          }}
+        />
+      </Field>
+
+      {error && <div className="form-error">{error}</div>}
+
+      {preview && (
+        <div className="import-preview">
+          <div className="import-summary">
+            <span>共 <b>{preview.total}</b> 行</span>
+            <span className="ok-text">可导入 <b>{preview.validCount}</b></span>
+            <span className="dup-text">重复跳过 <b>{preview.duplicateCount}</b></span>
+            <span className="err-text">有误 <b>{preview.errorCount}</b></span>
+          </div>
+          {preview.newCategories.length > 0 && (
+            <p className="import-hint">将自动新建分类：{preview.newCategories.join("、")}</p>
+          )}
+          <div className="import-table-wrap">
+            <table className="import-table">
+              <thead>
+                <tr><th>行</th><th>日期</th><th>类型</th><th>分类</th><th>金额</th><th>标题</th><th>状态</th></tr>
+              </thead>
+              <tbody>
+                {preview.rows.slice(0, 60).map((row) => (
+                  <tr key={row.line}>
+                    <td>{row.line}</td>
+                    <td>{row.date || "—"}</td>
+                    <td>{row.typeName || "—"}</td>
+                    <td>{row.category}</td>
+                    <td>{row.amountCents ? `¥${money(row.amountCents, 2)}` : "—"}</td>
+                    <td>{row.title}</td>
+                    <td className={`status-${row.status}`}>{row.status === "ok" ? "可导入" : row.message}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {preview.rows.length > 60 && <p className="import-hint">仅预览前 60 行，导入时会处理全部 {preview.total} 行。</p>}
+          <p className="import-guide">{preview.guide}</p>
+        </div>
+      )}
+
+      {result && (
+        <div className="import-result">
+          <b>导入完成</b>
+          <p>成功写入 {result.imported} 笔；跳过重复 {result.skipped} 笔；无效行 {result.errorCount} 行。</p>
+          {result.newCategories.length > 0 && <p>新建分类：{result.newCategories.join("、")}</p>}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function FinancePage() {
+  const [month, setMonth] = useState(currentMonthText);
+  const [filters, setFilters] = useState<FinanceTransactionQuery>({ type: 0, categoryId: 0, keyword: "" });
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [page, setPage] = useState(1);
+  const [data, setData] = useState<FinanceOverview | null>(null);
+  const [categories, setCategories] = useState<FinanceCategory[]>([]);
+  const [rows, setRows] = useState<FinanceTransactionRow[]>([]);
+  const [listMeta, setListMeta] = useState({ total: 0, incomeCents: 0, expenseCents: 0 });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
+  const [dialog, setDialog] = useState<FinanceDialog>(null);
+  const [toast, setToast] = useState<ToastState>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+
+  const notify: Notify = (text, tone = "ok") => setToast({ text, tone });
+  const refresh = () => setReload((value) => value + 1);
+  const pageSize = showAll ? 20 : 5;
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
     setError("");
-    fetchFinanceOverview()
-      .then((result) => {
-        if (active) setData(result);
+    Promise.all([
+      fetchFinanceOverview(month),
+      fetchFinanceCategories(),
+      fetchFinanceTransactions({
+        month,
+        type: filters.type,
+        categoryId: filters.categoryId,
+        keyword: filters.keyword,
+        page,
+        pageSize,
+      }),
+    ])
+      .then(([overview, categoryList, transactionList]) => {
+        if (!active) return;
+        setData(overview);
+        setCategories(categoryList.items);
+        setRows(transactionList.items);
+        setListMeta({
+          total: transactionList.total,
+          incomeCents: transactionList.incomeCents,
+          expenseCents: transactionList.expenseCents,
+        });
       })
       .catch((err: Error) => {
         if (active) setError(err.message || "读取失败");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
     return () => {
       active = false;
     };
-  }, [attempt]);
+  }, [month, filters.type, filters.categoryId, filters.keyword, page, pageSize, reload]);
+
+  const updateFilter = (patch: FinanceTransactionQuery) => {
+    setFilters((current) => ({ ...current, ...patch }));
+    setPage(1);
+  };
+  const resetFilters = () => {
+    setMonth(currentMonthText());
+    setFilters({ type: 0, categoryId: 0, keyword: "" });
+    setPage(1);
+  };
+  const activeFilters = (filters.type ? 1 : 0) + (filters.categoryId ? 1 : 0) + (filters.keyword ? 1 : 0);
+  const pageCount = Math.max(1, Math.ceil(listMeta.total / pageSize));
+
+  const downloadTemplate = async () => {
+    try {
+      const template = await fetchImportTemplate();
+      downloadCsv(template.filename, template.content);
+      notify("导入模板已下载");
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "模板下载失败", "err");
+    }
+  };
+
+  const exportRows = async () => {
+    try {
+      const file = await fetchFinanceExport({
+        month,
+        type: filters.type,
+        categoryId: filters.categoryId,
+        keyword: filters.keyword,
+      });
+      if (!file.total) {
+        notify("当前筛选下没有可导出的流水", "err");
+        return;
+      }
+      downloadCsv(file.filename, file.content);
+      notify(`已导出 ${file.total} 笔流水`);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "导出失败", "err");
+    }
+  };
+
+  const askDelete = (row: FinanceTransactionRow) => {
+    setDialog({
+      kind: "confirm",
+      title: "删除这笔流水？",
+      message: `「${row.title}」¥${money(row.amountCents, 2)} 将移出统计，图表会同步更新。`,
+      onConfirm: async () => {
+        await deleteFinanceTransaction(row.id);
+        notify("流水已删除");
+        refresh();
+      },
+    });
+  };
+
+  const runConfirm = async () => {
+    if (dialog?.kind !== "confirm") return;
+    setConfirmBusy(true);
+    try {
+      await dialog.onConfirm();
+      setDialog(null);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "操作失败", "err");
+    } finally {
+      setConfirmBusy(false);
+    }
+  };
+
+  const menuItems: MenuItem[] = [
+    { label: "导入流水", icon: "upload", onClick: () => setDialog({ kind: "import" }) },
+    { label: "下载导入模板", icon: "download", onClick: () => void downloadTemplate() },
+    { label: "导出当前筛选", icon: "download", onClick: () => void exportRows() },
+    { label: "分类管理", icon: "layout", onClick: () => setDialog({ kind: "categories" }) },
+    { label: "刷新数据", icon: "refresh", onClick: refresh },
+  ];
 
   const trend = data?.trend ?? [];
-  const categories = data?.categories ?? [];
+  const shares = data?.categories ?? [];
   const peak = Math.max(100000, ...trend.flatMap((point) => [point.incomeCents, point.expenseCents]));
   const yMax = Math.ceil(peak / 50000) * 50000;
   const incomePath = linePath(trend.map((point) => point.incomeCents), yMax);
   const expensePath = linePath(trend.map((point) => point.expenseCents), yMax);
   const yLabels = [1, 0.75, 0.5, 0.25, 0].map((ratio) => `${Math.round((yMax * ratio) / 100000)}k`);
-  const donutStops = categories.map((item, index) => {
-    const from = categories.slice(0, index).reduce((sum, current) => sum + current.percent, 0);
+  const donutStops = shares.map((item, index) => {
+    const from = shares.slice(0, index).reduce((sum, current) => sum + current.percent, 0);
     return `${item.color} ${from}% ${from + item.percent}%`;
   });
-  const monthLabel = data ? MONTH_LABELS[Number(data.month.slice(5, 7)) - 1] : "";
+  const monthValue = data?.month ?? month;
+  const monthLabel = MONTH_LABELS[Number(monthValue.slice(5, 7)) - 1] || "本月";
 
   return (
     <div className="page">
@@ -564,14 +773,15 @@ function FinancePage() {
         title="记账"
         subtitle="收支趋势、预算与每一笔生活选择。"
         color="#E56F4A"
-        status={data ? `已同步 ${data.totalCount} 笔流水` : "正在同步…"}
+        status={`${loading ? "同步中" : "已同步"} ${listMeta.total} 笔流水`}
+        menu={menuItems}
         actions={
           <>
-            <button className="secondary-btn">
+            <button className={`secondary-btn ${filterOpen || activeFilters ? "filter-active" : ""}`} onClick={() => setFilterOpen((value) => !value)}>
               <Icon name="filter" size={16} />
-              筛选
+              筛选{activeFilters > 0 ? ` · ${activeFilters}` : ""}
             </button>
-            <button className="primary-btn">
+            <button className="primary-btn" onClick={() => setDialog({ kind: "transaction" })}>
               <Icon name="plus" size={16} />
               记一笔
             </button>
@@ -581,50 +791,59 @@ function FinancePage() {
         {error && (
           <div className="finance-error">
             <span>读取失败：{error}</span>
-            <button className="text-btn" onClick={() => setAttempt((value) => value + 1)}>
+            <button className="text-btn" onClick={refresh}>
               重试
             </button>
           </div>
         )}
+
+        {filterOpen && (
+          <div className="filter-bar">
+            <Field label="月份">
+              <input type="month" value={month} onChange={(event) => { setMonth(event.target.value || currentMonthText()); setPage(1); }} />
+            </Field>
+            <Field label="收支类型">
+              <select value={filters.type ?? 0} onChange={(event) => updateFilter({ type: Number(event.target.value) })}>
+                <option value={0}>全部</option>
+                <option value={1}>仅收入</option>
+                <option value={2}>仅支出</option>
+              </select>
+            </Field>
+            <Field label="分类">
+              <select value={filters.categoryId ?? 0} onChange={(event) => updateFilter({ categoryId: Number(event.target.value) })}>
+                <option value={0}>全部分类</option>
+                {categories.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="关键字" grow>
+              <input value={filters.keyword ?? ""} placeholder="标题 / 备注 / 分类" onChange={(event) => updateFilter({ keyword: event.target.value })} />
+            </Field>
+            <button className="text-btn filter-reset" onClick={resetFilters}>重置</button>
+            <p className="filter-hint">月份同时影响上方总览与图表，其余条件作用于下方流水列表。</p>
+          </div>
+        )}
+
         <div className="stats-row">
-          <Stat
-            label={`${monthLabel || "本月"}收入`}
-            value={data ? `¥ ${money(data.incomeCents)}` : "—"}
-            change={signedPct(data?.incomeChangePct)}
-          />
-          <Stat
-            label={`${monthLabel || "本月"}支出`}
-            value={data ? `¥ ${money(data.expenseCents)}` : "—"}
-            change={signedPct(data?.expenseChangePct)}
-            good={(data?.expenseChangePct ?? 0) <= 0}
-          />
-          <Stat
-            label="结余率"
-            value={data ? `${data.balanceRate}%` : "—"}
-            change={signedPct(data?.balanceChangePct)}
-          />
+          <Stat label={`${monthLabel}收入`} value={data ? `¥ ${money(data.incomeCents)}` : "—"} change={signedPct(data?.incomeChangePct)} />
+          <Stat label={`${monthLabel}支出`} value={data ? `¥ ${money(data.expenseCents)}` : "—"} change={signedPct(data?.expenseChangePct)} good={(data?.expenseChangePct ?? 0) <= 0} />
+          <Stat label="结余率" value={data ? `${data.balanceRate}%` : "—"} change={signedPct(data?.balanceChangePct)} />
         </div>
+
         <div className="detail-grid finance-grid">
           <Panel
             title="收支趋势"
             aside={
               <div className="legend">
-                <span>
-                  <i className="income" />
-                  收入
-                </span>
-                <span>
-                  <i />
-                  支出
-                </span>
+                <span><i className="income" />收入</span>
+                <span><i />支出</span>
               </div>
             }
           >
             <div className="finance-chart">
               <div className="y-labels">
-                {yLabels.map((label) => (
-                  <span key={label}>{label}</span>
-                ))}
+                {yLabels.map((label) => <span key={label}>{label}</span>)}
               </div>
               <svg viewBox="0 0 700 210" preserveAspectRatio="none">
                 <path className="gridline" d="M0 20H700M0 65H700M0 110H700M0 155H700M0 200H700" />
@@ -632,21 +851,18 @@ function FinancePage() {
                 <path className="expense-line" d={expensePath} />
               </svg>
               <div className="x-labels">
-                {trend.map((point) => (
-                  <span key={point.month}>{point.label}</span>
-                ))}
+                {trend.map((point) => <span key={point.month}>{point.label}</span>)}
               </div>
             </div>
           </Panel>
-          <Panel title="支出分类" aside={<button className="text-btn">查看全部</button>}>
+          <Panel
+            title="支出分类"
+            aside={<button className="text-btn" onClick={() => setDialog({ kind: "categories" })}>查看全部 <Icon name="arrow" size={13} /></button>}
+          >
             <div className="donut-wrap">
               <div
                 className="donut"
-                style={{
-                  background: categories.length
-                    ? `conic-gradient(${donutStops.join(", ")})`
-                    : "conic-gradient(#e9e4d8 0% 100%)",
-                }}
+                style={{ background: shares.length ? `conic-gradient(${donutStops.join(", ")})` : "conic-gradient(#e9e4d8 0% 100%)" }}
               >
                 <div>
                   <b>¥{money(data?.expenseCents ?? 0)}</b>
@@ -654,64 +870,88 @@ function FinancePage() {
                 </div>
               </div>
               <div className="cat-list">
-                {categories.map((item) => (
-                  <Category
-                    key={item.name}
-                    color={item.color}
-                    name={item.name}
-                    val={`${item.percent}%`}
-                  />
-                ))}
-                {!categories.length && <Category color="#e9e4d8" name="暂无支出" val="0%" />}
+                {shares.map((item) => <Category key={item.name} color={item.color} name={item.name} val={`${item.percent}%`} />)}
+                {!shares.length && <Category color="#e9e4d8" name="暂无支出" val="0%" />}
               </div>
             </div>
           </Panel>
         </div>
+
         <Panel
-          title="最近流水"
-          aside={
-            <button className="text-btn">
-              全部流水 <Icon name="arrow" size={14} />
-            </button>
-          }
+          title={showAll ? "全部流水" : "最近流水"}
+          className="transactions-panel"
+          aside={<button className="text-btn" onClick={() => { setShowAll((value) => !value); setPage(1); }}>{showAll ? "收起" : "全部流水"} <Icon name="arrow" size={14} /></button>}
         >
+          <div className="table-summary">
+            <span>共 {listMeta.total} 笔</span>
+            <span>收入 ¥{money(listMeta.incomeCents, 2)}</span>
+            <span>支出 ¥{money(listMeta.expenseCents, 2)}</span>
+            {activeFilters > 0 && <span className="filter-tag">筛选中</span>}
+          </div>
           <table>
             <thead>
-              <tr>
-                <th>日期</th>
-                <th>交易</th>
-                <th>分类</th>
-                <th>金额</th>
-                <th />
-              </tr>
+              <tr><th>日期</th><th>交易</th><th>分类</th><th>金额</th><th /></tr>
             </thead>
             <tbody>
-              {(data?.recent ?? []).map((row) => (
+              {rows.map((row) => (
                 <tr key={row.id}>
                   <td>{row.date}</td>
                   <td>
                     <b>{row.title}</b>
+                    {row.note && <small className="row-note">{row.note}</small>}
                   </td>
-                  <td>
-                    <Badge>{row.category}</Badge>
-                  </td>
-                  <td className={row.type === 1 ? "positive" : ""}>
-                    {row.type === 1 ? "+" : "−"} ¥{money(row.amountCents, 2)}
-                  </td>
-                  <td>
-                    <Icon name="more" size={15} />
+                  <td><Badge>{row.category}</Badge></td>
+                  <td className={row.type === 1 ? "positive" : ""}>{row.type === 1 ? "+" : "−"} ¥{money(row.amountCents, 2)}</td>
+                  <td className="row-actions-cell">
+                    <Dropdown
+                      items={[
+                        { label: "编辑", icon: "edit", onClick: () => setDialog({ kind: "transaction", row }) },
+                        { label: "删除", icon: "trash", danger: true, onClick: () => askDelete(row) },
+                      ]}
+                    />
                   </td>
                 </tr>
               ))}
-              {!data?.recent.length && (
-                <tr>
-                  <td colSpan={5}>还没有流水记录</td>
-                </tr>
+              {!rows.length && (
+                <tr><td colSpan={5} className="empty-cell">还没有符合条件的流水，换个筛选或记一笔吧</td></tr>
               )}
             </tbody>
           </table>
+          {showAll && pageCount > 1 && (
+            <div className="pagination">
+              <button className="secondary-btn" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</button>
+              <span>第 {page} / {pageCount} 页</span>
+              <button className="secondary-btn" disabled={page >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>下一页</button>
+            </div>
+          )}
         </Panel>
       </ModuleShell>
+
+      {dialog?.kind === "transaction" && (
+        <TransactionDialog row={dialog.row ?? null} categories={categories} onClose={() => setDialog(null)} onSaved={refresh} notify={notify} />
+      )}
+      {dialog?.kind === "categories" && (
+        <CategoryDialog categories={categories} onClose={() => setDialog(null)} onChanged={refresh} notify={notify} />
+      )}
+      {dialog?.kind === "import" && (
+        <ImportDialog onClose={() => setDialog(null)} onImported={refresh} notify={notify} />
+      )}
+      {dialog?.kind === "confirm" && (
+        <Modal
+          title={dialog.title}
+          eyebrow="CONFIRM"
+          onClose={() => setDialog(null)}
+          footer={
+            <>
+              <button className="secondary-btn" onClick={() => setDialog(null)}>取消</button>
+              <button className="primary-btn danger-solid" disabled={confirmBusy} onClick={() => void runConfirm()}>{confirmBusy ? "处理中…" : "确认删除"}</button>
+            </>
+          }
+        >
+          <p className="confirm-text">{dialog.message}</p>
+        </Modal>
+      )}
+      <Toast toast={toast} />
     </div>
   );
 }
@@ -735,27 +975,7 @@ function Stat({
     </div>
   );
 }
-function Panel({
-  title,
-  aside,
-  children,
-  className = "",
-}: {
-  title: string;
-  aside?: React.ReactNode;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <section className={`panel ${className}`}>
-      <header>
-        <h3>{title}</h3>
-        {aside}
-      </header>
-      {children}
-    </section>
-  );
-}
+
 function Category({ color, name, val }: { color: string; name: string; val: string }) {
   return (
     <div>
@@ -764,572 +984,6 @@ function Category({ color, name, val }: { color: string; name: string; val: stri
         {name}
       </span>
       <b>{val}</b>
-    </div>
-  );
-}
-
-function MusicPage() {
-  const [playing, setPlaying] = useState(true);
-  return (
-    <div className="page music-page">
-      <ModuleShell
-        title="音乐"
-        subtitle="收藏声音，也收藏它们发生时的心情。"
-        color="#9B72D2"
-        status="音乐资料库 · 2,184 首"
-        actions={
-          <>
-            <button className="secondary-btn">
-              <Icon name="filter" size={16} />
-              筛选
-            </button>
-            <button className="primary-btn purple">
-              <Icon name="plus" size={16} />
-              新建歌单
-            </button>
-          </>
-        }
-      >
-        <div className="music-layout">
-          <aside className="playlist-side">
-            <div className="side-label">你的资料库</div>
-            {["最近播放", "特别喜欢", "2024 年度歌单", "深夜散步", "周日的厨房"].map((x, i) => (
-              <button key={x} className={i === 0 ? "active" : ""}>
-                <span>{String(i + 1).padStart(2, "0")}</span>
-                {x}
-                <small>{[32, 86, 24, 41, 18][i]}</small>
-              </button>
-            ))}
-          </aside>
-          <div className="music-main">
-            <div className="music-hero">
-              <div>
-                <div className="eyebrow">MADE FOR LIM</div>
-                <h2>晚风与未读完的书</h2>
-                <p>安静、松弛，适合留给自己的夜晚。</p>
-                <button className="primary-btn purple" onClick={() => setPlaying(!playing)}>
-                  <Icon name={playing ? "pause" : "play"} size={15} />
-                  {playing ? "暂停播放" : "开始播放"}
-                </button>
-              </div>
-              <div className="hero-disc">
-                <div className="album-art album-2">
-                  <span>
-                    SUNDAY
-                    <br />
-                    LIGHT
-                  </span>
-                </div>
-                <i />
-              </div>
-            </div>
-            <div className="section-title">
-              <h3>最近播放</h3>
-              <button className="text-btn">
-                查看全部 <Icon name="arrow" size={14} />
-              </button>
-            </div>
-            <div className="album-grid">
-              {[
-                ["album-1", "Punisher", "Phoebe Bridgers"],
-                ["album-3", "Charm", "Clairo"],
-                ["album-4", "Blonde", "Frank Ocean"],
-                ["album-5", "The Land Is...", "Sufjan Stevens"],
-              ].map((a, i) => (
-                <div className="album-card" key={a[1]}>
-                  <div className={`album-art ${a[0]}`}>
-                    <span>
-                      {i === 1 ? "CHARM" : i === 2 ? "BLONDE" : i === 3 ? "LAND" : "STILL LIFE"}
-                    </span>
-                    <button>
-                      <Icon name="play" size={16} />
-                    </button>
-                  </div>
-                  <b>{a[1]}</b>
-                  <span>{a[2]}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="player">
-          <div className="tiny-cover album-1" />
-          <div className="now-title">
-            <b>Garden Song</b>
-            <span>Phoebe Bridgers</span>
-          </div>
-          <div className="controls">
-            <button>
-              <Icon name="chevron" size={17} />
-            </button>
-            <button className="control-main" onClick={() => setPlaying(!playing)}>
-              <Icon name={playing ? "pause" : "play"} size={17} />
-            </button>
-            <button>
-              <Icon name="chevron" size={17} />
-            </button>
-          </div>
-          <span className="player-time">1:42</span>
-          <div className="player-progress">
-            <i />
-          </div>
-          <span className="player-time">4:05</span>
-        </div>
-      </ModuleShell>
-    </div>
-  );
-}
-
-function PlansPage() {
-  const [view, setView] = useState<"kanban" | "timeline">("kanban");
-  const columns = [
-    {
-      name: "待处理",
-      count: 3,
-      cards: [
-        ["整理年度照片", "生活", "10月26日"],
-        ["梳理十一月预算", "个人", "10月28日"],
-        ["读完《观看之道》", "阅读", "本周"],
-      ],
-    },
-    {
-      name: "进行中",
-      count: 2,
-      cards: [
-        ["个人网站迭代", "创作", "今天"],
-        ["整理设计素材库", "工作", "明天"],
-      ],
-    },
-    {
-      name: "已完成",
-      count: 3,
-      cards: [
-        ["完成十月复盘", "个人", "已完成"],
-        ["预约牙科检查", "生活", "已完成"],
-        ["更新阅读书单", "阅读", "已完成"],
-      ],
-    },
-  ];
-  return (
-    <div className="page">
-      <ModuleShell
-        title="计划"
-        subtitle="把想做的事，放进看得见的时间里。"
-        color="#4C8D78"
-        status="本周完成率 68%"
-        actions={
-          <>
-            <div className="segmented">
-              <button
-                className={view === "kanban" ? "active" : ""}
-                onClick={() => setView("kanban")}
-              >
-                看板
-              </button>
-              <button
-                className={view === "timeline" ? "active" : ""}
-                onClick={() => setView("timeline")}
-              >
-                时间轴
-              </button>
-            </div>
-            <button className="primary-btn green">
-              <Icon name="plus" size={16} />
-              新计划
-            </button>
-          </>
-        }
-      >
-        <div className="plan-summary">
-          <div>
-            <span>本周进度</span>
-            <b>17 / 25</b>
-          </div>
-          <div className="summary-track">
-            <i />
-          </div>
-          <div className="avatars">
-            <i>LM</i>
-            <span>只属于你的空间</span>
-          </div>
-          <div className="week-nav">
-            <button>‹</button>
-            <b>10月 21 — 27日</b>
-            <button>›</button>
-          </div>
-        </div>
-        {view === "kanban" ? (
-          <div className="kanban">
-            {columns.map((col, ci) => (
-              <div className="kanban-col" key={col.name}>
-                <header>
-                  <div>
-                    <i className={`col-dot c${ci}`} />
-                    <b>{col.name}</b>
-                    <span>{col.count}</span>
-                  </div>
-                  <button>
-                    <Icon name="plus" size={16} />
-                  </button>
-                </header>
-                {col.cards.map((c, i) => (
-                  <article className={ci === 2 ? "completed" : ""} key={c[0]} draggable>
-                    <div className="drag-handle">⠿</div>
-                    <Badge>{c[1]}</Badge>
-                    <h4>{c[0]}</h4>
-                    <footer>
-                      <span>
-                        <Icon name={ci === 2 ? "check" : "calendar"} size={14} />
-                        {c[2]}
-                      </span>
-                      <button>
-                        <Icon name="more" size={15} />
-                      </button>
-                    </footer>
-                  </article>
-                ))}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="timeline-view">
-            {week.map((d, i) => (
-              <div className={i === 3 ? "active" : ""} key={d}>
-                <span>{d}</span>
-                <b>{21 + i}</b>
-                {i === 0 && (
-                  <article style={{ height: 82 }}>
-                    晨间阅读<small>08:00</small>
-                  </article>
-                )}
-                {i === 2 && (
-                  <article className="gold" style={{ height: 120 }}>
-                    素材库整理<small>14:30</small>
-                  </article>
-                )}
-                {i === 3 && (
-                  <article className="green" style={{ height: 98 }}>
-                    网站迭代<small>19:00</small>
-                  </article>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </ModuleShell>
-    </div>
-  );
-}
-
-function LearningPage() {
-  return (
-    <div className="page">
-      <ModuleShell
-        title="学习"
-        subtitle="让每一点投入，都留下清晰的成长轨迹。"
-        color="#D4A63D"
-        status="今日已学习 42 分钟"
-        actions={
-          <>
-            <button className="secondary-btn">
-              <Icon name="calendar" size={16} />
-              学习记录
-            </button>
-            <button className="primary-btn gold">
-              <Icon name="plus" size={16} />
-              新建笔记
-            </button>
-          </>
-        }
-      >
-        <div className="learning-summary">
-          <Panel title="本月学习">
-            <div className="learning-ring">
-              <Ring value={72} color="#D4A63D" size={126} />
-              <div>
-                <span>本月累计</span>
-                <strong>18h 40m</strong>
-                <small>比上月多 3h 20m</small>
-              </div>
-            </div>
-          </Panel>
-          <Panel title="连续学习">
-            <div className="streak">
-              <strong>12</strong>
-              <span>天</span>
-              <div>
-                {week.map((x, i) => (
-                  <i className={i < 6 ? "on" : ""} key={x}>
-                    {x}
-                  </i>
-                ))}
-              </div>
-            </div>
-          </Panel>
-          <Panel title="本周目标">
-            <div className="goal">
-              <strong>
-                4.5 <small>/ 6 小时</small>
-              </strong>
-              <div>
-                <i />
-              </div>
-              <span>还差 1.5 小时</span>
-            </div>
-          </Panel>
-        </div>
-        <div className="detail-grid learn-grid">
-          <Panel title="学习热力图" aside={<span className="muted">过去 16 周</span>}>
-            <div className="heatmap-label">
-              <span>一</span>
-              <span>三</span>
-              <span>五</span>
-            </div>
-            <div className="heatmap large">
-              {Array.from({ length: 112 }, (_, i) => (
-                <i key={i} className={`l${(i * 13 + (i % 5)) % 5}`} />
-              ))}
-            </div>
-            <div className="heat-legend">
-              <span>少</span>
-              {[0, 1, 2, 3, 4].map((x) => (
-                <i className={`l${x}`} key={x} />
-              ))}
-              <span>多</span>
-            </div>
-          </Panel>
-          <Panel title="正在学习" aside={<button className="text-btn">全部课程</button>}>
-            <div className="course-list">
-              <Course title="界面设计系统" meta="8 / 12 章" progress={67} color="#D4A63D" />
-              <Course title="日语 · N3 语法" meta="21 / 40 节" progress={52} color="#9B72D2" />
-              <Course title="现代艺术史" meta="5 / 16 章" progress={31} color="#4C8D78" />
-            </div>
-          </Panel>
-        </div>
-        <div className="section-title">
-          <h3>最近笔记</h3>
-          <button className="text-btn">
-            查看全部 <Icon name="arrow" size={14} />
-          </button>
-        </div>
-        <div className="notes-grid">
-          {["设计系统不是组件库", "包豪斯：形式追随功能", "今日阅读摘录"].map((n, i) => (
-            <article key={n}>
-              <div className="note-tag">{["设计", "艺术史", "阅读"][i]}</div>
-              <h3>{n}</h3>
-              <p>
-                {
-                  [
-                    "一致性不是让一切看起来相同，而是让不同事物拥有清晰的关系。",
-                    "真正的现代主义不是一种风格，而是一种持续追问的方式。",
-                    "我们以为自己在读一本书，其实是在重新认识经验。",
-                  ][i]
-                }
-              </p>
-              <footer>
-                <span>10月 {22 - i * 2}日</span>
-                <Icon name="arrow" size={15} />
-              </footer>
-            </article>
-          ))}
-        </div>
-      </ModuleShell>
-    </div>
-  );
-}
-function Course({
-  title,
-  meta,
-  progress,
-  color,
-}: {
-  title: string;
-  meta: string;
-  progress: number;
-  color: string;
-}) {
-  return (
-    <div className="course">
-      <span className="course-icon" style={{ background: color + "18", color }}>
-        {title.slice(0, 1)}
-      </span>
-      <div>
-        <b>{title}</b>
-        <span>{meta}</span>
-        <div>
-          <i style={{ width: progress + "%", background: color }} />
-        </div>
-      </div>
-      <strong>{progress}%</strong>
-    </div>
-  );
-}
-
-function DesignSystem() {
-  const templates = [
-    ["List", "清晰的信息行与批量操作", "三种密度"],
-    ["Chart", "趋势、比例与数据洞察", "四种图表"],
-    ["CardFlow", "可拖拽卡片与状态流转", "响应式"],
-    ["Timeline", "按时间组织事件与记录", "纵向/横向"],
-    ["Calendar", "日期、热力与周期视图", "周/月/年"],
-  ];
-  return (
-    <div className="page system-page">
-      <div className="system-hero">
-        <div className="eyebrow">LIFE OS / DESIGN SYSTEM 01</div>
-        <h1>
-          安静的秩序，
-          <br />
-          装下鲜活的日常。
-        </h1>
-        <p>一套为个人数据设计的模块化语言。克制、清晰，也保留温度。</p>
-        <div className="version">Foundations · v1.4.0</div>
-      </div>
-      <section className="system-section">
-        <header>
-          <span>01</span>
-          <div>
-            <h2>色彩与排版</h2>
-            <p>低饱和自然色构成模块语义，以朱砂橙作为全局强调。</p>
-          </div>
-        </header>
-        <div className="system-grid">
-          <div className="color-spec">
-            <h3>Semantic colors</h3>
-            <div className="swatches">
-              {[
-                ["Ink", "#252521"],
-                ["Paper", "#F6F5F0"],
-                ["Accent", "#E56F4A"],
-                ["Moss", "#4C8D78"],
-                ["Iris", "#9B72D2"],
-                ["Ochre", "#D4A63D"],
-              ].map((c) => (
-                <div key={c[0]}>
-                  <i style={{ background: c[1] }} />
-                  <b>{c[0]}</b>
-                  <span>{c[1]}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="type-spec">
-            <h3>Type scale</h3>
-            <div className="display-type">
-              Aa <span>Display / 48</span>
-            </div>
-            <div className="heading-type">
-              个人兴趣聚合系统 <span>Heading / 24</span>
-            </div>
-            <p>
-              清晰的层级帮助信息自然浮现。<span>Body / 14</span>
-            </p>
-          </div>
-        </div>
-      </section>
-      <section className="system-section">
-        <header>
-          <span>02</span>
-          <div>
-            <h2>ModuleShell 外壳</h2>
-            <p>每个模块共享标题、操作、内容与状态四个稳定区域。</p>
-          </div>
-        </header>
-        <div className="shell-demo">
-          <div className="demo-top">
-            <div>
-              <i />
-              <span />
-              <span />
-            </div>
-            <b>Header / Actions</b>
-          </div>
-          <div className="demo-content">
-            <Icon name="layout" size={32} />
-            <b>Content Template</b>
-            <span>List · Chart · CardFlow · Timeline · Calendar</span>
-          </div>
-          <div className="demo-status">
-            <i /> Status / Metadata
-          </div>
-        </div>
-      </section>
-      <section className="system-section">
-        <header>
-          <span>03</span>
-          <div>
-            <h2>五种内容模板</h2>
-            <p>由模块元数据选择，新增模块无需重新设计页面结构。</p>
-          </div>
-        </header>
-        <div className="template-grid">
-          {templates.map((t, i) => (
-            <article key={t[0]}>
-              <div className={`template-visual t${i}`}>
-                {i === 0 && [1, 2, 3].map((x) => <i key={x} />)}
-                {i === 1 && (
-                  <svg viewBox="0 0 100 60">
-                    <path d="M0 50 25 38 45 44 68 17 100 28" />
-                  </svg>
-                )}
-                {i === 2 && (
-                  <>
-                    <i />
-                    <i />
-                    <i />
-                  </>
-                )}
-                {i === 3 && [1, 2, 3].map((x) => <i key={x} />)}
-                {i === 4 && Array.from({ length: 21 }, (_, x) => <i key={x} />)}
-              </div>
-              <div>
-                <span>0{i + 1}</span>
-                <h3>{t[0]}</h3>
-                <p>{t[1]}</p>
-                <Badge>{t[2]}</Badge>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-      <section className="system-section">
-        <header>
-          <span>04</span>
-          <div>
-            <h2>交互与间距</h2>
-            <p>8pt 网格、克制动效与清晰的桌面操作反馈。</p>
-          </div>
-        </header>
-        <div className="interaction-grid">
-          <div>
-            <span>Spacing scale</span>
-            <div className="spacing-bars">
-              {[8, 16, 24, 32, 48].map((x) => (
-                <i style={{ width: x * 2 }} key={x}>
-                  {x}
-                </i>
-              ))}
-            </div>
-          </div>
-          <div>
-            <span>Radius system</span>
-            <div className="radii">
-              <i>8</i>
-              <i>12</i>
-              <i>18</i>
-              <i>24</i>
-            </div>
-          </div>
-          <div>
-            <span>Interaction</span>
-            <div className="interaction-samples">
-              <button className="primary-btn">Default</button>
-              <button className="secondary-btn">Hover</button>
-              <kbd>⌘ K</kbd>
-            </div>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }
@@ -1368,15 +1022,8 @@ function GeneratedModule({
               <p>导航入口、模块外壳、操作区和状态区均已根据配置自动创建。</p>
             </div>
           </div>
-          <div className="generated-grid">
-            {[1, 2, 3].map((item) => (
-              <article key={item}>
-                <i style={{ background: color + (item === 1 ? "30" : "14") }} />
-                <span>COLLECTION 0{item}</span>
-                <h3>{["最近添加", "收藏内容", "待整理"][item - 1]}</h3>
-                <p>从这里开始建立属于你的内容结构。</p>
-              </article>
-            ))}
+          <div className="template-preview generated-preview" style={{ "--pv-accent": color } as CSSProperties}>
+            <TemplatePreview template={templateKeyOf(template)} accent={color} />
           </div>
         </div>
       </ModuleShell>
@@ -1387,65 +1034,128 @@ function GeneratedModule({
 function Workspace() {
   const { user, logout } = useAuth();
   const [page, setPage] = useState<Page>("home");
-  const [modules, setModules] = useState(initialModules);
+  const [modules, setModules] = useState<WorkspaceModule[]>([]);
+  const [moduleBusy, setModuleBusy] = useState(false);
+  const [toast, setToast] = useState<ToastState>(null);
   const [query, setQuery] = useState("");
   const [modal, setModal] = useState(false);
   const [drag, setDrag] = useState<number | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [context, setContext] = useState<{ x: number; y: number; name: string } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+  const [context, setContext] = useState<{ x: number; y: number; key: string; name: string } | null>(null);
   const avatarText = user?.nickname ? user.nickname.slice(0, 1).toUpperCase() : "LM";
+
+  const notify: Notify = (text, tone = "ok") => setToast({ text, tone });
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const close = (event: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) setSettingsOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [settingsOpen]);
+
+  useEffect(() => {
+    let active = true;
+    fetchModules()
+      .then((data) => {
+        if (active) setModules(data.items);
+      })
+      .catch((err: Error) => {
+        if (active) notify(err.message || "模块读取失败", "err");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const visible = useMemo(() => modules.filter((item) => !item.hidden), [modules]);
   const filtered = useMemo(
-    () =>
-      modules.filter(
-        (m) => m.name.includes(query) || m.note.toLowerCase().includes(query.toLowerCase()),
-      ),
-    [modules, query],
+    () => visible.filter((item) => item.name.includes(query) || item.key.includes(query.toLowerCase())),
+    [visible, query],
   );
+
+  const runModuleAction = async (action: () => Promise<{ items: WorkspaceModule[] }>) => {
+    setModuleBusy(true);
+    try {
+      const data = await action();
+      setModules(data.items);
+      return data.items;
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "模块操作失败", "err");
+      return null;
+    } finally {
+      setModuleBusy(false);
+    }
+  };
+
+  /** 拖动排序：把可见模块的完整顺序发给后端，避免搜索过滤时下标错位。 */
   const move = (to: number) => {
     if (drag === null || drag === to) return;
-    const next = [...modules];
+    const next = [...filtered];
     const [item] = next.splice(drag, 1);
     next.splice(to, 0, item);
-    setModules(next);
     setDrag(null);
+    const moved = new Set(next.map((entry) => entry.key));
+    const keys = [...next.map((entry) => entry.key), ...visible.filter((entry) => !moved.has(entry.key)).map((entry) => entry.key)];
+    void runModuleAction(() => sortModules(keys));
   };
-  const fixedContent: Partial<Record<Page, React.ReactNode>> = {
+
+  const addFromLibrary = async (key: string) => {
+    const items = await runModuleAction(() => addWorkspaceModule(key));
+    if (!items) return;
+    const added = items.find((item) => item.key === key && !item.hidden);
+    if (!added) return;
+    notify(`已添加「${added.name}」，设置已保存`);
+  };
+
+  /** 在「添加模块」弹窗内直接把已添加模块移出侧边栏，弹窗保持在原地。 */
+  const removeFromLibrary = async (key: string) => {
+    const target = modules.find((item) => item.key === key);
+    const items = await runModuleAction(() => hideModule(key));
+    if (!items) return;
+    if (page === key) setPage("home");
+    notify(`「${target?.name ?? "模块"}」已移出侧边栏，可在「待添加」中加回`);
+  };
+
+  const removeModule = async (key: string, name: string) => {
+    setContext(null);
+    const items = await runModuleAction(() => hideModule(key));
+    if (!items) return;
+    if (page === key) setPage("home");
+    notify(`「${name}」已删除，可在「添加模块」中加回`);
+  };
+
+  const fixedContent: Record<string, React.ReactNode> = {
     home: <Dashboard open={setPage} />,
     finance: <FinancePage />,
     music: <MusicPage />,
     plans: <PlansPage />,
     learning: <LearningPage />,
-    system: <DesignSystem />,
+    inspiration: <InspirationPage />,
+    movies: <MoviesPage />,
+    travel: <TravelPage />,
+    fitness: <FitnessPage />,
+    album: <AlbumPage />,
+    system: <DesignSystemPage />,
   };
-  const activeModule = modules.find((module) => module.id === page);
+  const activeModule = visible.find((module) => module.key === page);
   const content =
     fixedContent[page] ??
     (activeModule ? (
-      <GeneratedModule
-        name={activeModule.name}
-        color={activeModule.color}
-        template={activeModule.note.replace(" 模板", "")}
-      />
+      <GeneratedModule name={activeModule.name} color={activeModule.color} template={activeModule.template} />
     ) : (
       fixedContent.home
     ));
-  const moduleCatalog = [
-    ["movies", "电影清单", "CardFlow", "#6389A8"],
-    ["travel", "旅行足迹", "Timeline", "#B87758"],
-    ["fitness", "运动记录", "Chart", "#5C927A"],
-    ["inspiration", "灵感收藏", "List", "#9B72D2"],
-  ] as const;
-  const addModule = (item: (typeof moduleCatalog)[number]) => {
-    const [id, name, template, color] = item;
-    if (!modules.some((module) => module.id === id)) {
-      setModules((current) => [
-        ...current,
-        { id, name, icon: "layout", color, note: `${template} 模板` },
-      ]);
-    }
-    setPage(id);
-    setModal(false);
-  };
+
   return (
     <div className="app" onClick={() => context && setContext(null)}>
       <aside className="sidebar">
@@ -1469,7 +1179,7 @@ function Workspace() {
         </button>
         <div className="nav-label">
           我的模块{" "}
-          <button>
+          <button onClick={() => setModal(true)} title="模块设置">
             <Icon name="more" size={15} />
           </button>
         </div>
@@ -1482,21 +1192,22 @@ function Workspace() {
               onDrop={() => move(i)}
               onContextMenu={(e) => {
                 e.preventDefault();
-                setContext({ x: e.clientX, y: e.clientY, name: m.name });
+                setContext({ x: e.clientX, y: e.clientY, key: m.key, name: m.name });
               }}
-              key={m.id}
-              className={`nav-item ${page === m.id ? "active" : ""}`}
-              onClick={() => setPage(m.id)}
+              key={m.key}
+              className={`nav-item ${page === m.key ? "active" : ""}`}
+              onClick={() => setPage(m.key)}
             >
               <span>
                 <i className="nav-icon" style={{ background: m.color + "15", color: m.color }}>
-                  <Icon name={m.icon} size={17} />
+                  <Icon name={m.icon as IconName} size={17} />
                 </i>
                 {m.name}
               </span>
               <i className="nav-dot" />
             </button>
           ))}
+          {!filtered.length && <p className="muted-text">还没有模块，点击下方添加</p>}
         </nav>
         <button className="add-module" onClick={() => setModal(true)}>
           <Icon name="plus" size={17} />
@@ -1551,7 +1262,7 @@ function Workspace() {
               ? "仪表盘"
               : page === "system"
                 ? "设计系统"
-                : modules.find((m) => m.id === page)?.name}
+                : visible.find((m) => m.key === page)?.name}
           </b>
         </div>
         <div className="top-actions">
@@ -1572,50 +1283,62 @@ function Workspace() {
             <Icon name="bell" />
           </button>
           <span className="divider" />
-          <button className="icon-btn">
-            <Icon name="settings" />
-          </button>
+          <div className="top-menu-wrap" ref={settingsRef}>
+            <button
+              className={`icon-btn ${settingsOpen ? "active" : ""}`}
+              aria-expanded={settingsOpen}
+              aria-label="账号设置"
+              onClick={() => setSettingsOpen((open) => !open)}
+            >
+              <Icon name="settings" />
+            </button>
+            {settingsOpen && (
+              <div className="profile-menu top-menu">
+                <div className="profile-menu-head">
+                  <b>{user?.nickname || "未命名用户"}</b>
+                  <span>{user?.email}</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setSettingsOpen(false);
+                    void logout();
+                  }}
+                >
+                  退出登录
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
       <main>{content}</main>
       {context && (
         <div className="context-menu" style={{ left: context.x, top: context.y }}>
           <b>{context.name}</b>
-          <button>固定到顶部</button>
-          <button>编辑模块配置</button>
-          <button>调整卡片尺寸</button>
+          <button
+            onClick={() => {
+              setPage(context.key);
+              setContext(null);
+            }}
+          >
+            打开模块
+          </button>
           <hr />
-          <button className="danger">隐藏模块</button>
+          <button className="danger" onClick={() => void removeModule(context.key, context.name)}>
+            隐藏模块
+          </button>
         </div>
       )}
       {modal && (
-        <div className="modal-backdrop" onMouseDown={() => setModal(false)}>
-          <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="modal-head">
-              <div>
-                <div className="eyebrow">MODULE LIBRARY</div>
-                <h2>添加新模块</h2>
-                <p>选择模板后即可创建，前端将自动生成入口与仪表盘卡片。</p>
-              </div>
-              <button className="icon-btn" onClick={() => setModal(false)}>
-                ×
-              </button>
-            </div>
-            <div className="module-options">
-              {moduleCatalog.map((x) => (
-                <button key={x[0]} onClick={() => addModule(x)}>
-                  <i style={{ background: x[3] }} />
-                  <div>
-                    <b>{x[1]}</b>
-                    <span>{x[2]} 模板</span>
-                  </div>
-                  <Icon name="plus" size={16} />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        <AddModuleDialog
+          modules={modules}
+          busy={moduleBusy}
+          onAdd={(key) => void addFromLibrary(key)}
+          onRemove={(key) => void removeFromLibrary(key)}
+          onClose={() => setModal(false)}
+        />
       )}
+      <Toast toast={toast} />
     </div>
   );
 }

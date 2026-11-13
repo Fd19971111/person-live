@@ -59,6 +59,37 @@ export async function refreshAccessToken(): Promise<string | null> {
   return refreshing
 }
 
+/** 表单上传入口：由浏览器自动带 multipart 边界，其余规则同 request。 */
+export async function upload<T>(path: string, form: FormData, retry = true): Promise<T> {
+  const headers = new Headers()
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`)
+  }
+
+  const response = await fetch(BASE_URL + path, {
+    method: 'POST',
+    body: form,
+    headers,
+    credentials: 'include',
+  })
+
+  if (response.status === 401 && retry) {
+    const token = await refreshAccessToken()
+    if (token) {
+      return upload<T>(path, form, false)
+    }
+  }
+
+  const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null
+  if (!payload) {
+    throw new ApiError(response.status, '网络异常，请稍后重试')
+  }
+  if (payload.code !== 0) {
+    throw new ApiError(payload.code, payload.message)
+  }
+  return payload.data
+}
+
 /** 统一请求入口：自动带上 access token，401 时尝试刷新一次并重放。 */
 export async function request<T>(
   path: string,
