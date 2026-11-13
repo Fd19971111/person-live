@@ -1,0 +1,26 @@
+server:
+  address:      ":8000"
+  openapiPath:  "/api.json"
+  swaggerPath:  "/swagger"
+  dumpRouterMap: false
+
+logger:
+  level:  "all"
+  stdout: true
+
+database:
+  default:
+    link:  "mysql:root:root@tcp(127.0.0.1:3306)/study?charset=utf8mb4&parseTime=true&loc=UTC"
+    debug: true
+
+jwt:
+  # 开发环境密钥，上线前必须通过环境变量或密钥管理服务替换
+  secret:     "study-dev-secret-please-change-in-production"
+  accessTtl:  "15m"
+  refreshTtl: "720h"
+
+auth:
+  cookieDomain: ""
+  cookieSecure: false
+  # 未配置 SMTP 时，验证链接只写入日志
+  webBaseUrl: "http://localhost:5173"
