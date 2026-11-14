@@ -9,6 +9,9 @@ api/storage/album/*
 !api/storage/album/.gitkeep
 *.log
 
+# 本地库快照：内容可用 cmd/seed 重新生成，不入库
+api/manifest/sql/003_finance_data.sql
+
 # 编辑器与系统
 .idea/
 .vscode/
