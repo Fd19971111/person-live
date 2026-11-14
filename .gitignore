@@ -1,0 +1,16 @@
+# 依赖与构建产物
+node_modules/
+dist/
+api/bin/
+release/
+
+# 运行期文件：相册原图与日志
+api/storage/album/*
+!api/storage/album/.gitkeep
+*.log
+
+# 编辑器与系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

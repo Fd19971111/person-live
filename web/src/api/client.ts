@@ -122,3 +122,41 @@ export async function request<T>(
   }
   return payload.data
 }
+
+/** 从 Content-Disposition 里取出后端建议的文件名。 */
+function pickFileName(header: string | null): string | null {
+  if (!header) return null
+  const matched = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(header)
+  const raw = matched?.[1] ?? matched?.[2]
+  return raw ? decodeURIComponent(raw.trim()) : null
+}
+
+/** 下载二进制响应（数据导出、附件等），带鉴权并在 401 时刷新重试一次。 */
+export async function download(path: string, fallbackName: string, retry = true): Promise<void> {
+  const headers = new Headers()
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`)
+  }
+
+  const response = await fetch(BASE_URL + path, { headers, credentials: 'include' })
+
+  if (response.status === 401 && retry) {
+    const token = await refreshAccessToken()
+    if (token) return download(path, fallbackName, false)
+  }
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as ApiResponse<unknown> | null
+    throw new ApiError(response.status, payload?.message || '下载失败，请稍后重试')
+  }
+
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = pickFileName(response.headers.get('Content-Disposition')) ?? fallbackName
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}

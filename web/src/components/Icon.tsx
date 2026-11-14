@@ -30,6 +30,7 @@ export type IconName =
   | "map"
   | "activity"
   | "bulb"
+  | "share"
   | "image";
 
 const paths: Record<IconName, React.ReactNode> = {
@@ -201,6 +202,13 @@ const paths: Record<IconName, React.ReactNode> = {
     <>
       <path d="M12 3a6 6 0 0 0-4 10.5c.7.6 1 1.5 1 2.5h6c0-1 .3-1.9 1-2.5A6 6 0 0 0 12 3Z" />
       <path d="M9.5 19h5M10 21.5h4" />
+    </>
+  ),
+  share: (
+    <>
+      <path d="M12 15V4" />
+      <path d="m8 8 4-4 4 4" />
+      <path d="M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5" />
     </>
   ),
 };

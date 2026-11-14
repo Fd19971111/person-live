@@ -37,6 +37,11 @@ var Main = gcmd.Command{
 			return err
 		}
 		s.AddStaticPath(albumlogic.URLPrefix, albumlogic.StorageDir())
+		// 公开只读接口：凭签名令牌访问，不经过 Auth 中间件。
+		s.Group("/api/public", func(group *ghttp.RouterGroup) {
+			group.Middleware(ghttp.MiddlewareHandlerResponse)
+			group.Bind(albumctl.NewPublicV1())
+		})
 		s.Group("/api", func(group *ghttp.RouterGroup) {
 			group.Middleware(ghttp.MiddlewareHandlerResponse)
 			group.Bind(

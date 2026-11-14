@@ -25,6 +25,7 @@ import TravelPage from "./features/travel/TravelPage";
 import FitnessPage from "./features/fitness/FitnessPage";
 import MusicPage from "./features/music/MusicPage";
 import AlbumPage from "./features/album/AlbumPage";
+import PublicAlbumPage from "./features/album/PublicAlbumPage";
 import DesignSystemPage from "./features/system/DesignSystemPage";
 import { TemplatePreview } from "./features/system/TemplatePreview";
 import { templateKeyOf } from "./features/system/templates";
@@ -37,6 +38,7 @@ import {
   sortModules,
   type WorkspaceModule,
 } from "./api/module";
+import { download } from "./api/client";
 import {
   commitFinanceImport,
   deleteFinanceCategory,
@@ -63,6 +65,9 @@ type Page = string;
 
 
 const MONTH_LABELS = ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"];
+
+/** 快捷键修饰键：Mac 显示 ⌘，其余平台显示 Ctrl。 */
+const MOD_KEY = typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.userAgent) ? "⌘" : "Ctrl";
 
 function signedPct(value: number | undefined) {
   if (value === undefined || Number.isNaN(value)) return "—";
@@ -1040,13 +1045,30 @@ function Workspace() {
   const [query, setQuery] = useState("");
   const [modal, setModal] = useState(false);
   const [drag, setDrag] = useState<number | null>(null);
-  const [profileOpen, setProfileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
   const [context, setContext] = useState<{ x: number; y: number; key: string; name: string } | null>(null);
   const avatarText = user?.nickname ? user.nickname.slice(0, 1).toUpperCase() : "LM";
 
   const notify: Notify = (text, tone = "ok") => setToast({ text, tone });
+
+  /** 导出全部数据：后端把各业务表与相册原图打成一个 ZIP 下载。 */
+  const exportAll = async () => {
+    if (exporting) return;
+    setSettingsOpen(false);
+    setExporting(true);
+    try {
+      await download("/user/export", "lifehub.zip");
+      notify("数据包已开始下载");
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "导出失败，请稍后重试", "err");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     if (!toast) return;
@@ -1062,6 +1084,33 @@ function Workspace() {
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [settingsOpen]);
+
+  // 内容区是独立的滚动容器，切换模块时要手动回到顶部。
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
+  }, [page]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const mod = event.metaKey || event.ctrlKey;
+      if (!mod) return;
+      const key = event.key.toLowerCase();
+      // ⌘/Ctrl + K：聚焦全局搜索（需拦掉浏览器默认的地址栏搜索）
+      if (key === "k") {
+        event.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+        return;
+      }
+      // ⌘/Ctrl + 1：回到仪表盘
+      if (key === "1") {
+        event.preventDefault();
+        setPage("home");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -1175,7 +1224,7 @@ function Workspace() {
             <Icon name="grid" />
             仪表盘
           </span>
-          <kbd>⌘1</kbd>
+          <kbd>{MOD_KEY}1</kbd>
         </button>
         <div className="nav-label">
           我的模块{" "}
@@ -1207,32 +1256,27 @@ function Workspace() {
               <i className="nav-dot" />
             </button>
           ))}
-          {!filtered.length && <p className="muted-text">还没有模块，点击下方添加</p>}
+          {!filtered.length && <p className="muted-text">还没有模块，点击右上角 + 添加</p>}
         </nav>
-        <button className="add-module" onClick={() => setModal(true)}>
-          <Icon name="plus" size={17} />
-          添加模块
-        </button>
         <div className="sidebar-bottom">
-          <button
-            className={`nav-item ${page === "system" ? "active" : ""}`}
-            onClick={() => setPage("system")}
-          >
-            <span>
-              <Icon name="layout" />
-              设计系统
-            </span>
-          </button>
-          <div className="profile-wrap">
-            {profileOpen && (
+          <div className="profile-wrap" ref={settingsRef}>
+            {settingsOpen && (
               <div className="profile-menu">
                 <div className="profile-menu-head">
                   <b>{user?.nickname || "未命名用户"}</b>
                   <span>{user?.email}</span>
                 </div>
                 <button
+                  className="neutral"
+                  disabled={exporting}
+                  onClick={() => void exportAll()}
+                >
+                  {exporting ? "正在打包…" : "导出全部数据"}
+                </button>
+                <p className="menu-tip">含全部记录与相册原图，ZIP 格式</p>
+                <button
                   onClick={() => {
-                    setProfileOpen(false);
+                    setSettingsOpen(false);
                     void logout();
                   }}
                 >
@@ -1246,7 +1290,11 @@ function Workspace() {
                 <b>{user?.nickname || "朋友"}</b>
                 <span>{user?.emailVerified ? "邮箱已验证" : "个人空间"}</span>
               </div>
-              <button onClick={() => setProfileOpen((open) => !open)}>
+              <button
+                aria-label="账号菜单"
+                aria-expanded={settingsOpen}
+                onClick={() => setSettingsOpen((open) => !open)}
+              >
                 <Icon name="more" size={16} />
               </button>
             </div>
@@ -1269,11 +1317,12 @@ function Workspace() {
           <label className="search">
             <Icon name="search" size={17} />
             <input
+              ref={searchRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="搜索一切…"
             />
-            <kbd>⌘ K</kbd>
+            <kbd>{MOD_KEY} K</kbd>
           </label>
           <button className="icon-btn">
             <Icon name="command" />
@@ -1283,35 +1332,25 @@ function Workspace() {
             <Icon name="bell" />
           </button>
           <span className="divider" />
-          <div className="top-menu-wrap" ref={settingsRef}>
-            <button
-              className={`icon-btn ${settingsOpen ? "active" : ""}`}
-              aria-expanded={settingsOpen}
-              aria-label="账号设置"
-              onClick={() => setSettingsOpen((open) => !open)}
-            >
-              <Icon name="settings" />
-            </button>
-            {settingsOpen && (
-              <div className="profile-menu top-menu">
-                <div className="profile-menu-head">
-                  <b>{user?.nickname || "未命名用户"}</b>
-                  <span>{user?.email}</span>
-                </div>
-                <button
-                  onClick={() => {
-                    setSettingsOpen(false);
-                    void logout();
-                  }}
-                >
-                  退出登录
-                </button>
-              </div>
-            )}
-          </div>
+          <button
+            className="icon-btn"
+            title="添加模块"
+            aria-label="添加模块"
+            onClick={() => setModal(true)}
+          >
+            <Icon name="plus" />
+          </button>
+          <button
+            className={`icon-btn ${page === "system" ? "active" : ""}`}
+            title="设计系统"
+            aria-label="设计系统"
+            onClick={() => setPage("system")}
+          >
+            <Icon name="layout" />
+          </button>
         </div>
       </header>
-      <main>{content}</main>
+      <main ref={mainRef}>{content}</main>
       {context && (
         <div className="context-menu" style={{ left: context.x, top: context.y }}>
           <b>{context.name}</b>
@@ -1350,7 +1389,19 @@ function AuthGate() {
   return <Workspace />;
 }
 
+/** 公开分享走 hash 路由，不依赖服务器把 /s 回退到 index.html。 */
+function readShareToken() {
+  if (typeof window === "undefined") return "";
+  const hash = window.location.hash;
+  if (!hash.startsWith("#/s")) return "";
+  const index = hash.indexOf("?");
+  if (index < 0) return "";
+  return new URLSearchParams(hash.slice(index + 1)).get("t") ?? "";
+}
+
 export default function App() {
+  const [shareToken] = useState(readShareToken);
+  if (shareToken) return <PublicAlbumPage token={shareToken} />;
   return (
     <AuthProvider>
       <AuthGate />

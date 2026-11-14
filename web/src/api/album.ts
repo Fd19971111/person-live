@@ -72,3 +72,30 @@ export function saveAlbumCategory(input: AlbumCategoryInput): Promise<{ id: numb
 export function deleteAlbumCategory(id: number): Promise<unknown> {
   return request<unknown>('/album/category/delete', { method: 'POST', body: JSON.stringify({ id }) })
 }
+
+export interface AlbumShare {
+  token: string
+  expiresAt: string
+}
+
+/** 免登录的只读相册数据。 */
+export interface SharedAlbum {
+  owner: string
+  category: string
+  expireAt: string
+  total: number
+  sizeText: string
+  photos: AlbumPhoto[]
+}
+
+/** category 传空字符串表示把整个相册分享出去。 */
+export function createAlbumShare(category: string): Promise<AlbumShare> {
+  return request<AlbumShare>('/album/share', {
+    method: 'POST',
+    body: JSON.stringify({ category }),
+  })
+}
+
+export function fetchSharedAlbum(token: string): Promise<SharedAlbum> {
+  return request<SharedAlbum>(`/public/album/view?t=${encodeURIComponent(token)}`)
+}

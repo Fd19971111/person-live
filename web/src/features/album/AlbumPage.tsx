@@ -5,12 +5,14 @@ import { fetchAlbumOverview, type AlbumOverview, type AlbumPhoto } from "../../a
 import { AlbumUploadDialog } from "./AlbumUploadDialog";
 import { AlbumPhotoDialog } from "./AlbumPhotoDialog";
 import { AlbumCategoryDialog } from "./AlbumCategoryDialog";
+import { AlbumShareDialog } from "./AlbumShareDialog";
 import { ALBUM_COLOR } from "./albumFormat";
 
 type AlbumDialog =
   | { kind: "upload" }
   | { kind: "photo"; photo: AlbumPhoto }
   | { kind: "categories" }
+  | { kind: "share" }
   | null;
 
 /** filter 为 null 表示全部，空字符串表示未分类。 */
@@ -63,6 +65,11 @@ export default function AlbumPage() {
 
   const menuItems: MenuItem[] = [
     { label: "上传照片", icon: "upload", onClick: () => setDialog({ kind: "upload" }) },
+    {
+      label: filter ? `分享「${filter}」` : "分享整个相册",
+      icon: "share",
+      onClick: () => setDialog({ kind: "share" }),
+    },
     { label: "相册分类", icon: "layout", onClick: () => setDialog({ kind: "categories" }) },
     { label: "刷新数据", icon: "refresh", onClick: refresh },
   ];
@@ -189,6 +196,10 @@ export default function AlbumPage() {
           onChanged={refresh}
           notify={notify}
         />
+      )}
+
+      {dialog?.kind === "share" && (
+        <AlbumShareDialog category={filter ?? ""} onClose={() => setDialog(null)} />
       )}
 
       <Toast toast={toast} />

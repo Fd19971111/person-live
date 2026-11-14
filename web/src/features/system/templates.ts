@@ -30,12 +30,11 @@ export function templateKeyOf(template: string): TemplateKey {
   return TEMPLATE_ALIASES[template.trim().toLowerCase()] ?? "list";
 }
 
-/** 语义色，点击后作为预览区的强调色。 */
+/** 语义强调色：点击后立即应用到全站，色值保持低饱和。 */
 export const ACCENTS: { name: string; color: string }[] = [
-  { name: "Ink", color: "#252521" },
-  { name: "Paper", color: "#F6F5F0" },
-  { name: "Accent", color: "#E56F4A" },
-  { name: "Moss", color: "#4C8D78" },
-  { name: "Iris", color: "#9B72D2" },
-  { name: "Ochre", color: "#D4A63D" },
+  { name: "Clay", color: "#D2694A" },
+  { name: "Moss", color: "#5F8A7D" },
+  { name: "Indigo", color: "#5F6E9C" },
+  { name: "Iris", color: "#8E7BB0" },
+  { name: "Slate", color: "#6389A8" },
 ];
